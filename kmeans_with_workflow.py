@@ -2,14 +2,10 @@
 from csv import reader
 from sklearn.cluster import KMeans
 import joblib
+import ray
 
-from dagster import (
-    execute_pipeline,
-    make_python_type_usable_as_dagster_type,
-    pipeline,
-    repository,
-    solid,
-)
+
+ray.init()
 
 
 # Load a CSV file
@@ -51,23 +47,19 @@ def getRawIrisData():
 
     return dataset
 
-@solid
-def getTrainData(context):
+@ray.remote
+def getTrainData():
     dataset = getRawIrisData()
     trainData = [ [one[0], one[1], one[2], one[3]] for one in dataset ]
 
-    context.log.info(
-        "Found {n_cereals} trainData".format(n_cereals=len(trainData))
-    )
-
     return trainData
 
-@solid
-def getNumClusters(context):
+@ray.remote
+def getNumClusters():
     return 3
 
-@solid
-def train(context, numClusters, trainData):
+@ray.remote
+def train(numClusters, trainData):
     print("numClusters=%d" % numClusters)
 
     model = KMeans(n_clusters=numClusters)
@@ -79,8 +71,8 @@ def train(context, numClusters, trainData):
 
     return trainData
 
-@solid
-def predict(context, irisData):
+@ray.remote
+def predict(irisData):
     # test saved prediction
     model = joblib.load('model.kmeans')
 
@@ -91,17 +83,16 @@ def predict(context, irisData):
     print(labels)
 
 
-@pipeline
 def machine_learning_workflow_pipeline():
-    trainData = getTrainData()
-    numClusters = getNumClusters()
-    trainData = train(numClusters, trainData)
-    predict(trainData)
+    trainData = getTrainData.remote()
+    numClusters = getNumClusters.remote()
+    trainData = train.remote(numClusters, trainData)
+    result = predict.remote(trainData)
+
+    result = ray.get(result)
+    print("result=", result)
 
 
 
 if __name__ == "__main__":
-    result = execute_pipeline(
-        machine_learning_workflow_pipeline
-    )
-    assert result.success
+    machine_learning_workflow_pipeline()
