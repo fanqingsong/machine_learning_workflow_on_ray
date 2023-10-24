@@ -70,7 +70,6 @@ greenlet==0.4.17
 grpcio==1.30.0
 hiredis==1.1.0
 humanfriendly==8.2
-hydralib==5.57.3
 idna==2.5
 idna-ssl==1.1.0
 imagesize==1.2.0
